@@ -1,5 +1,6 @@
 *.out
 *.tags
+./Saves/*.swoop
 
 # Prerequisites
 *.d
