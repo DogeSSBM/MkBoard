@@ -1,3 +1,4 @@
+#define THREAD_COUNT 16
 #include "Includes.h"
 
 int main(int argc, char **argv)

@@ -287,9 +287,9 @@ bool boardPlaceBombs(Board *board)
             tpos = coordShift(tpos, dirINV(d), 1);
     if(board->type != B_RNG){
         atomic_init(&done, -1);
-        ThreadData data[4] = {0};
-        pthread_t thread[4] = {0};
-        for(int i = 0; i < 4; i++){
+        ThreadData data[THREAD_COUNT] = {0};
+        pthread_t thread[THREAD_COUNT] = {0};
+        for(int i = 0; i < THREAD_COUNT; i++){
             data[i].board = *board;
             boardAlloc(&(data[i].board));
             boardResetFirstClick(&(data[i].board));
@@ -297,13 +297,13 @@ bool boardPlaceBombs(Board *board)
             data[i].index = i;
             pthread_create(&(thread[i]), NULL, boardPlaceBombsThread, &(data[i]));
         }
-        // int tries[4] = {0};
-        for(int i = 0; i < 4; i++){
+        // int tries[THREAD_COUNT] = {0};
+        for(int i = 0; i < THREAD_COUNT; i++){
             pthread_join(thread[i], NULL);
         }
         boardAlloc(board);
         boardCpy(board, &(data[atomic_load(&done)].board));
-        for(int i = 0; i < 4; i++)
+        for(int i = 0; i < THREAD_COUNT; i++)
             boardFree(&(data[i].board));
     }else{
         boardAlloc(board);
