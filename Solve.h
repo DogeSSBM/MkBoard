@@ -159,22 +159,7 @@ bool satSolve(Board *board)
 {
     for(int y = 0; y < board->len.y; y++){
         for(int x = 0; x < board->len.x; x++){
-            // uint adjTile = 0;
-            // uint adjFlag = 0;
             const Coord pos = {.x = x, .y = y};
-            // for(int yo = -1; yo <= 1; yo++){
-            //     for(int xo = -1; xo <= 1; xo++){
-            //         const Coord adj = {.x = x + xo, .y = y + yo};
-            //         if(
-            //             (adj.x != x || adj.y != y) &&
-            //             adj.x >= 0 && adj.y >= 0 &&
-            //             adj.x < len.x && adj.y < len.y
-            //         ){
-            //             adjTile += tile[adj.x][adj.y].state == S_TILE;
-            //             adjFlag += tile[adj.x][adj.y].state == S_FLAG;
-            //         }
-            //     }
-            // }
             if(
                 board->tile[x][y].state == S_NUM &&
                 board->tile[x][y].num &&
@@ -207,29 +192,6 @@ bool solve(Board *board)
     bool progress;
     const Length len = board->len;
     Tile **tile = board->tile;
-    // uint **adjTile = calloc(len.y, sizeof(uint*));
-    // uint **adjFlag = calloc(len.y, sizeof(uint*));
-    // for(int y = 0; y < len.y; y++){
-    //     adjTile[y] = calloc(len.x, sizeof(uint));
-    //     adjFlag[y] = calloc(len.x, sizeof(uint));
-    // }
-    // for(int y = 0; y < len.y; y++){
-    //     for(int x = 0; x < len.x; x++){
-    //         const Coord pos = {.x = x, .y = y};
-    //         adjTile[pos.x][pos.y] = 8;
-    //         for(int yo = -1; yo <= 1; yo++){
-    //             for(int xo = -1; xo <= 1; xo++){
-    //                 const Coord adj = {.x = pos.x+xo, .y = pos.y+yo};
-    //                 adjTile[pos.x][pos.y] -= (
-    //                     (adj.x != pos.x || adj.y != pos.y) &&
-    //                     adj.x >= 0 && adj.y >= 0 &&
-    //                     adj.x < len.x && adj.y < len.y &&
-    //                     tile[adj.x][adj.y] == S_NUM
-    //                 );
-    //             }
-    //         }
-    //     }
-    // }
     do{
         progress = false;
         for(int y = 0; y < len.y; y++){
