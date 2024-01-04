@@ -12,6 +12,7 @@
 #include <stddef.h>
 #include <stdatomic.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "Types.h"
 #include "Panic.h"

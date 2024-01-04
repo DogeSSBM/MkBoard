@@ -1,69 +1,10 @@
 #ifndef BOARD_H
 #define BOARD_H
 
-void printBoard(const Board *board, const bool decals)
-{
-    assertExpr(board->tile);
-    for(int y = 0; y < board->len.y; y++){
-        for(int x = 0; x < board->len.x; x++){
-            if(decals){
-                if(board->tile[x][y].state == S_NUM)
-                    putchar(board->tile[x][y].num ? '0' + board->tile[x][y].num : ' ');
-                else
-                    putchar(TileStateChar[board->tile[x][y].state]);
-            }else{
-                if(board->tile[x][y].isBomb)
-                    putchar('B');
-                else
-                    putchar(board->tile[x][y].num ? '0' + board->tile[x][y].num : ' ');
-            }
-            putchar(' ');
-        }
-        putchar('\n');
-    }
-    putchar('\n');
-}
-
-void printDecalsPos(const Board *board, const Coord pos)
-{
-    assertExpr(board->tile);
-    for(int y = 0; y < board->len.y; y++){
-        for(int x = 0; x < board->len.x; x++){
-            if(x == pos.x && y == pos.y)
-                putchar('X');
-            else if(board->tile[x][y].state == S_NUM)
-                putchar(board->tile[x][y].num ? '0'+board->tile[x][y].num : ' ');
-            else
-                putchar(TileStateChar[board->tile[x][y].state]);
-            putchar(' ');
-        }
-        putchar('\n');
-    }
-}
-
-uint printCleared(const uint cleared)
-{
-    if(cleared)
-        printf("Cleared %u tiles.\n", cleared);
-    return cleared;
-}
-
-void printTile(const Tile tile)
-{
-    printf("(Tile){\n");
-    printf("\t.isBomb = %s,\n", tile.isBomb ? "true" : "false");
-    printf("\t.num = %u,\n", tile.num);
-    printf("\t.state = %s\n", TileStateStr[tile.state]);
-    printf("}\n");
-}
-
 Board boardDefault(void)
 {
     Board board = {
-        .winLen = iC(0, 0),
         .len = iC(30, 16),
-        .scale = 0,
-        .off = iC(0, 0),
         .numBombs = 99,
         .lDown = iC(-1,-1),
         .rDown = iC(-1,-1),
@@ -76,6 +17,8 @@ Board boardDefault(void)
 void boardCpy(Board *dst, Board *src)
 {
     assertExpr(dst->tile != NULL && src->tile != NULL);
+    if(!coordSame(dst->len, src->len))
+        printf("dst->len: (%2i,%2i) src->len: (%2i,%2i)\n", dst->len.x, dst->len.y, src->len.x, src->len.y);
     assertExpr(coordSame(dst->len, src->len));
     for(int x = 0; x < dst->len.x; x++){
         for(int y = 0; y < dst->len.y; y++){
@@ -108,6 +51,7 @@ Tile** boardTileAlloc(const Length len)
 void boardAlloc(Board *board)
 {
     assertExprMsg(!board->tile, "Tried to boardAlloc when board->tile was not NULL");
+    printf("allocating: (%2i,%2i)\n", board->len.x, board->len.y);
     board->tile = boardTileAlloc(board->len);
 }
 
@@ -149,11 +93,6 @@ uint floodFill(Board *board, const Coord pos)
     if(!validTilePos(pos, board->len) || board->tile[pos.x][pos.y].state != S_TILE)
         return 0;
     if(board->tile[pos.x][pos.y].isBomb){
-        printBoard(board, false);
-        printf("\n");
-        printBoard(board, true);
-        printf("\n");
-        printDecalsPos(board, pos);
         panic("tried to prop bomb at %i,%i\n", pos.x, pos.y);
     }
     board->tile[pos.x][pos.y].state = S_NUM;
@@ -174,6 +113,28 @@ uint floodFill(Board *board, const Coord pos)
     }
 
     return cleared;
+}
+
+void floodFillFast(Board *board, const Coord pos)
+{
+    board->tile[pos.x][pos.y].state = S_NUM;
+    for(int yo = -1; yo <= 1; yo++){
+        for(int xo = -1; xo <= 1; xo++){
+            const Coord adj = {.x = pos.x+xo, .y = pos.y+yo};
+            if(
+                (pos.x != adj.x || pos.y != adj.y) &&
+                adj.y >= 0 && adj.y < board->len.y &&
+                adj.x >= 0 && adj.x < board->len.x &&
+                board->tile[adj.x][adj.y].state == S_TILE
+            ){
+                if(board->tile[adj.x][adj.y].num > 0){
+                    board->tile[adj.x][adj.y].state = S_NUM;
+                }else{
+                    floodFillFast(board, adj);
+                }
+            }
+        }
+    }
 }
 
 uint floodAdj(Board *board, const Coord pos)
@@ -205,7 +166,7 @@ void boardCalcNums(Board *board)
             board->tile[x][y].num = adjBombs(board, iC(x,y));
 }
 
-void boardResetFirstClick(Board *board)
+void old_boardResetFirstClick(Board *board)
 {
     assertExprMsg(board->tile, "Must alloc board->tile before resetting to first click state.");
     for(int y = 0; y < board->len.y; y++){
@@ -215,6 +176,14 @@ void boardResetFirstClick(Board *board)
             board->tile[x][y].num = 0;
         }
     }
+    board->state = BS_FIRST;
+}
+
+void boardResetFirstClick(Board *board)
+{
+    assertExprMsg(board->tile, "Must alloc board->tile before resetting to first click state.");
+    for(int x = 0; x < board->len.x; x++)
+        memset(board->tile[x], 0, board->len.y * sizeof(Tile));
     board->state = BS_FIRST;
 }
 
@@ -235,11 +204,11 @@ uint boardRemaining(Board *board)
     return total - board->numBombs;
 }
 
-void boardRngBombs(Board *board)
+void boardRngBombs(Board *board, const Coord tpos)
 {
-    const Coord tpos = board->lDown;
-    assertExpr(validTilePos(tpos, board->len));
-    boardResetFirstClick(board);
+    for(int x = 0; x < board->len.x; x++)
+        memset(board->tile[x], 0, board->len.y * sizeof(Tile));
+    board->state = BS_FIRST;
     for(uint i = 0; i < board->numBombs; i++){
         Coord pos;
         do{
@@ -255,67 +224,116 @@ void boardRngBombs(Board *board)
     }
 }
 
-_Atomic int done;
+volatile _Atomic int *done;
 
 void* boardPlaceBombsThread(void *voidData)
 {
     ThreadData *data = voidData;
     Board *board = &(data->board);
-    for(ull i = 0; i < 100000; i++){
-        if(atomic_load(&done) != -1){
-            return NULL;
+    const Coord tpos = data->tpos;
+    Tile **tile = board->tile;
+    ull n = 0;
+    do{
+        for(uint i = 0; i < 50; i++){
+            for(int x = 0; x < board->len.x; x++)
+                memset(tile[x], 0, board->len.y * sizeof(Tile));
+            board->state = BS_FIRST;
+            for(uint i = 0; i < board->numBombs; i++){
+                Coord pos;
+                do{
+                    pos.x = rand()%board->len.x;
+                    pos.y = rand()%board->len.y;
+                }while(tile[pos.x][pos.y].isBomb || (
+                        pos.x >= tpos.x-1 && pos.x < tpos.x+2 &&
+                        pos.y >= tpos.y-1 && pos.y < tpos.y+2
+                ));
+                tile[pos.x][pos.y].isBomb = true;
+            }
+            for(int y = 0; y < board->len.y; y++){
+                for(int x = 0; x < board->len.x; x++){
+                    const Coord pos = {.x = x, .y = y};
+                    for(int yo = -1; yo <= 1; yo++){
+                        for(int xo = -1; xo <= 1; xo++){
+                            const Coord adj = {.x = pos.x+xo, .y = pos.y+yo};
+                            tile[x][y].num += (
+                                (adj.x != pos.x || adj.y != pos.y) &&
+                                adj.x >= 0 && adj.x < board->len.x &&
+                                adj.y >= 0 && adj.y < board->len.y &&
+                                tile[adj.x][adj.y].isBomb);
+                        }
+                    }
+                }
+            }
+            floodFillFast(board, tpos);
+            if(solve(board)){
+                if(atomic_load(done) != -1)
+                    return NULL;
+                atomic_store(done, data->index);
+                printf("Storing %i\n", data->index);
+                return NULL;
+            }
         }
-        boardRngBombs(board);
-        boardCalcNums(board);
-        floodFill(board, data->tpos);
-        if(solve(board)){
-            atomic_store(&done, data->index);
-            data->board = *board;
-            return NULL;
-        }
-    }
-    return 0;
+        n++;
+        printf("Thread[%i]: %llu\n", data->index, n*50);
+    }while(atomic_load(done) == -1);
+    return NULL;
+}
+
+void signal_handler(int signal)
+{
+    (void)signal;
+    atomic_store(done, -2);
 }
 
 bool boardPlaceBombs(Board *board)
 {
-    Coord tpos = board->lDown;
+    const Length len = board->len;
+    _Atomic int d;
+    done = &d;
+    atomic_init(done, -1);
+    signal(SIGTERM, signal_handler);
+    signal(SIGINT, signal_handler);
+    Coord tpos = {.x = board->len.x / 2, .y = board->len.y / 2};
     printf("placing bombs\n");
-    assertExpr(board->state == BS_FIRST);
     for(Direction d = 0; d < 4; d++)
         if(!validTilePos(coordShift(tpos, d, 1), board->len))
             tpos = coordShift(tpos, dirINV(d), 1);
     if(board->type != B_RNG){
-        atomic_init(&done, -1);
-        ThreadData data[THREAD_COUNT] = {0};
-        pthread_t thread[THREAD_COUNT] = {0};
-        for(int i = 0; i < THREAD_COUNT; i++){
+        ThreadData data[NUM_THREADS] = {0};
+        pthread_t thread[NUM_THREADS] = {0};
+        for(int i = 0; i < NUM_THREADS; i++){
             data[i].board = *board;
+            data[i].board.len = board->len;
             boardAlloc(&(data[i].board));
             boardResetFirstClick(&(data[i].board));
             data[i].tpos = tpos;
             data[i].index = i;
             pthread_create(&(thread[i]), NULL, boardPlaceBombsThread, &(data[i]));
         }
-        // int tries[THREAD_COUNT] = {0};
-        for(int i = 0; i < THREAD_COUNT; i++){
+        for(int i = 0; i < NUM_THREADS; i++){
             pthread_join(thread[i], NULL);
         }
+        signal(SIGTERM, SIG_DFL);
+        signal(SIGINT, SIG_DFL);
+        const int index = atomic_load(done);
+        if(index == -2)
+            exit(EXIT_SUCCESS);
+        printf("index: %i\n", index);
+        board->len = len;
         boardAlloc(board);
-        boardCpy(board, &(data[atomic_load(&done)].board));
-        for(int i = 0; i < THREAD_COUNT; i++)
+        boardCpy(board, &(data[index].board));
+        for(int i = 0; i < NUM_THREADS; i++){
             boardFree(&(data[i].board));
+        }
     }else{
         boardAlloc(board);
         boardResetFirstClick(board);
     }
-
-    printBoard(board, false);
-    printBoard(board, true);
     boardResetTileStates(board);
     floodFill(board, tpos);
     board->state = BS_PLAY;
     printf("Tiles remaining: %u\n", boardRemaining(board));
+    boardSave(board);
     return true;
 }
 

@@ -31,7 +31,7 @@ void boardCalcNums(Board *board);
 void boardResetFirstClick(Board *board);
 void boardResetTileStates(Board *board);
 uint boardRemaining(Board *board);
-void boardRngBombs(Board *board);
+void boardRngBombs(Board *, const Coord);
 void* boardPlaceBombsThread(void *voidData);
 bool boardPlaceBombs(Board *board);
 
